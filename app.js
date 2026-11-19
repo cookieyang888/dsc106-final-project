@@ -161,101 +161,85 @@ function setupWarmingMatch() {
    months: monthlyValues.filter(d => d.scenario === scenario).map(d => d.value)
   }));
  });
- const values = cases.flatMap(d => [d.annual, ...d.months]);
- const domain = [Math.min(0, d3.min(values)), d3.max(values)];
- const section = document.getElementById('match');
- const host = d3.select('#match-chart');
+ const color = d3.scaleLinear()
+  .domain([-1, 0, 2, 4, 6, 8])
+  .range(['#f3f6fc', '#e9effa', '#c3d3ef', '#8aa7df', '#526fb1', '#293c78'])
+  .clamp(true);
+ const chart = d3.select('#match-chart');
  const caseSelect = d3.select('#match-case');
- const monthSelect = d3.select('#match-month');
  const toggle = d3.select('#match-toggle');
- const monthControl = d3.select('#match-month-control');
+ const result = d3.select('#match-result');
  let showMonths = false;
- let first, match, monthRows;
+ let first, match, selectedMonth;
 
  caseSelect.selectAll('option').data(cases).join('option')
   .attr('value', (_, index) => index).text(d => d.label);
  caseSelect.property('value', cases.findIndex(d => d.location === 'London' && d.scenario === 'ssp585'));
- monthSelect.selectAll('option').data(monthNames).join('option')
-  .attr('value', (_, index) => index).text(d => d);
+
+ const strips = chart.selectAll('.year-strip').data([0, 1]).join('div').attr('class', 'year-strip');
+ const captions = strips.append('div').attr('class', 'year-caption');
+ captions.append('span');
+ captions.append('strong');
+ const tracks = strips.append('div').attr('class', 'year-track').attr('aria-hidden', 'true');
+ tracks.selectAll('span').data(d3.range(12)).join('span');
+ const monthPicker = chart.append('div').attr('class', 'year-months')
+  .attr('role', 'group').attr('aria-label', 'Inspect monthly warming');
+ const monthButtons = monthPicker.selectAll('button').data(monthNames).join('button')
+  .attr('type', 'button').html(month => `<span aria-hidden="true">${month.slice(0, 3)}</span>`)
+  .on('click', (_, month) => {
+   selectedMonth = monthNames.indexOf(month);
+   updateSelection();
+  });
+
+ const gaps = d3.select('.year-gaps');
+
+ function updateSelection() {
+  tracks.selectAll('span').classed('selected', month => month === selectedMonth);
+  monthButtons.attr('aria-pressed', (_, index) => String(index === selectedMonth));
+  if (showMonths) {
+   const a = first.months[selectedMonth], b = match.months[selectedMonth];
+   gaps.select('#annual-gap').text(`${Math.abs(first.annual - match.annual).toFixed(2)} °C`);
+   gaps.select('#month-gap-label').text(`${monthNames[selectedMonth]} gap`);
+   gaps.select('#month-gap').text(`${Math.abs(a - b).toFixed(2)} °C`);
+   result.text(`${monthNames[selectedMonth]}: ${first.location} ${fmt(a)} °C, ${match.location} ${fmt(b)} °C. That’s a ${Math.abs(a - b).toFixed(2)} °C gap.`);
+  } else {
+   result.text(`Their annual averages are about ${Math.abs(first.annual - match.annual).toFixed(2)} °C apart.`);
+  }
+ }
+
+ function updateView() {
+  chart.classed('is-monthly', showMonths);
+  gaps.property('hidden', !showMonths);
+  toggle.text(showMonths ? 'Show the annual average' : 'Reveal the months');
+  monthPicker.property('hidden', !showMonths);
+  updateSelection();
+ }
 
  function updatePair() {
   first = cases[Number(caseSelect.property('value'))];
   match = d3.least(cases.filter(d => d.location !== first.location), d => Math.abs(d.annual - first.annual));
-  monthRows = monthNames.map((label, index) => ({
-   label, index, a: first.months[index], b: match.months[index]
-  }));
-  const widest = d3.greatest(monthRows, d => Math.abs(d.a - d.b));
-  monthSelect.property('value', widest.index);
+  selectedMonth = d3.greatest(d3.range(12), month => Math.abs(first.months[month] - match.months[month]));
 
-  const entries = d3.select('#match-key').selectAll('li').data([first, match]).join('li');
-  entries.attr('class', (_, i) => i === 0 ? 'match-first' : 'match-second');
-  entries.text('');
-  entries.append('span').attr('class', 'match-symbol').attr('aria-hidden', 'true');
-  entries.append('span').text(d => d.label);
-  entries.append('strong').text(d => `${formatAnnual(d.annual)} °C annual`);
+  captions.select('span').text(index => [first, match][index].label);
+  captions.select('strong').text(index => `${formatAnnual([first, match][index].annual)} °C annual`);
+  tracks.each(function(index) {
+   const row = [first, match][index];
+   d3.select(this).selectAll('span')
+    .style('--annual', color(row.annual))
+    .style('--month', month => color(row.months[month]));
+  });
+  monthButtons.attr('aria-label', (name, month) =>
+   `${name}: ${first.location} ${fmt(first.months[month])} °C, ${match.location} ${fmt(match.months[month])} °C`);
   updateView();
  }
 
- function updateView() {
-  toggle.text(showMonths ? 'Show annual averages' : 'Reveal monthly warming');
-  monthControl.property('hidden', !showMonths);
-  if (showMonths) {
-   const row = monthRows[Number(monthSelect.property('value'))];
-   d3.select('#match-result').text(
-    `In ${row.label}, the model projects ${fmt(row.a)} °C near ${first.location} and ${fmt(row.b)} °C near ${match.location}. That’s a ${Math.abs(row.a - row.b).toFixed(2)} °C gap.`
-   );
-  } else {
-   d3.select('#match-result').text(
-    `Their annual averages are about ${Math.abs(first.annual - match.annual).toFixed(2)} °C apart. Reveal the months to see how the gap changes across the year.`
-   );
-  }
-  drawChart();
- }
-
- function drawChart() {
-  const width = host.node().clientWidth;
-  if (!width) return;
-  const selectedMonth = Number(monthSelect.property('value'));
-  const rows = showMonths ? monthRows : [{label: 'Annual', index: -1, a: first.annual, b: match.annual}];
-  const rowHeight = 28;
-  const top = 32;
-  const height = top + rows.length * rowHeight + 9;
-  const left = width < 510 ? 40 : 95;
-  const x = d3.scaleLinear().domain(domain).nice().range([left + 8, width - 21]);
-  const svg = host.selectAll('svg').data([null]).join('svg')
-   .attr('viewBox', `0 0 ${width} ${height}`).attr('role', 'img')
-   .attr('aria-label', showMonths
-    ? `Monthly temperature changes in degrees Celsius. ${first.label} versus ${match.label}. Use Inspect a month for exact values.`
-    : `Annual temperature changes in degrees Celsius: ${first.label}, ${formatAnnual(first.annual)}; ${match.label}, ${formatAnnual(match.annual)}.`);
-  svg.selectAll('*').remove();
-  svg.append('g').attr('class', 'match-axis').attr('transform', `translate(0,${top - 3})`)
-   .call(d3.axisTop(x).ticks(width < 450 ? 4 : 8).tickSize(-(height - top - 3))
-    .tickPadding(7).tickFormat(d => `${d} °C`));
-  const groups = svg.selectAll('.match-row').data(rows).join('g')
-   .attr('class', d => showMonths && d.index === selectedMonth ? 'match-row selected' : 'match-row')
-   .attr('transform', (_, index) => `translate(0,${top + (index + 0.5) * rowHeight})`);
-  groups.append('rect').attr('class', 'match-row-background').attr('x', 0).attr('y', -13)
-   .attr('width', width).attr('height', 26).attr('rx', 4);
-  groups.append('text').attr('x', 4).attr('dy', '0.34em')
-   .text(d => showMonths && width < 510 ? d.label.slice(0, 3) : d.label);
-  groups.append('line').attr('class', 'match-connector')
-   .attr('x1', d => x(d.a)).attr('x2', d => x(d.b)).attr('y1', -4).attr('y2', 4);
-  groups.append('circle').attr('class', 'match-first').attr('r', 4.5)
-   .attr('cx', d => x(d.a)).attr('cy', -4);
-  groups.append('rect').attr('class', 'match-second').attr('width', 8).attr('height', 8)
-   .attr('x', d => x(d.b) - 4).attr('y', 0);
-  groups.append('title').text(d => `${d.label}: ${first.label} ${fmt(d.a)} °C; ${match.label} ${fmt(d.b)} °C`);
- }
-
- caseSelect.on('change', updatePair);
- monthSelect.on('change', updateView);
- toggle.on('click', () => {
+ caseSelect.property('disabled', false).on('change', updatePair);
+ toggle.property('disabled', false).on('click', () => {
   showMonths = !showMonths;
   updateView();
  });
- section.hidden = false;
+ chart.property('hidden', false);
  updatePair();
- new ResizeObserver(drawChart).observe(host.node());
 }
 
 async function init(){
@@ -270,6 +254,7 @@ async function init(){
   baseline=d3.rollup(monthly.filter(d=>d.scenario==='historical'&&d.year>=1985&&d.year<=2014),rows=>d3.mean(rows,d=>d.temperature_c),d=>d.location,d=>d.month);
   for(const location of locations)for(const s of scenarios)if(localAnnual(location,s).length!==86)throw new Error(`Incomplete annual series: ${location}/${s}`);
   bindControls();renderTrend();renderLinked();setupWarmingMatch();
- }catch(error){console.error(error);document.getElementById('status').textContent='The climate data could not be loaded. Please reload the page. For local use, serve this folder with an HTTP server as described in the README.';}
+  setupGlobeFlight().catch(error => console.warn('Globe preview unavailable', error));
+ }catch(error){console.error(error);document.getElementById('match-result').textContent='Temperature projections could not load. Try reloading the page.';document.getElementById('status').textContent='The climate data could not be loaded. Please reload the page. For local use, serve this folder with an HTTP server as described in the README.';}
 }
 init();
