@@ -123,7 +123,7 @@ async function setupGlobeFlight() {
   }
  }
 
- function drawGlobe(stage, elapsed) {
+ function drawGlobe(stage) {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   if (!width || !height) return;
@@ -143,11 +143,6 @@ async function setupGlobeFlight() {
   const y = height * (mobile ? .36 : .51);
   disk = {x, y, radius: scale};
   projection.translate([x, y]).scale(scale).rotate([-center[0], -center[1]]);
-  const cloudLevel = travel && chapter === 0 && !reduced.matches
-   ? Math.exp(-((elapsed - .68) ** 2) / .012) : 0;
-  scene.style.setProperty('--cloud-opacity', (cloudLevel * .82).toFixed(3));
-  scene.style.setProperty('--cloud-offset', `${Math.round((elapsed - .68) * 650)}px`);
-
   ctx.save();
   ctx.beginPath();
   path(globe);
@@ -219,7 +214,7 @@ async function setupGlobeFlight() {
      center: travel.route(progress),
      zoom: d3.interpolateNumber(travel.startZoom, 2.62)(progress) - travel.pullback * Math.sin(Math.PI * progress)
     };
-    drawGlobe(-1, elapsed);
+    drawGlobe(-1);
     requestRender();
     return;
    }
@@ -227,7 +222,7 @@ async function setupGlobeFlight() {
    travel = undefined;
   }
   copyFor(chapter);
-  drawGlobe(chapter, 0);
+  drawGlobe(chapter);
  }
 
  function requestRender() {

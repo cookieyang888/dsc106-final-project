@@ -77,26 +77,12 @@
     radial-gradient(ellipse at 76% 46%, #242c51, #0c132a 50%, #080d1e 78%);
   background-size: 181px 173px, 227px 277px, 323px 191px, 177px 267px, 100% 100%;
 }
-#flight-globe, .flight-cloud {
+#flight-globe {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
-.flight-cloud {
-  pointer-events: none;
-  inset: -12%;
-  width: 124%;
-  height: 124%;
-  opacity: var(--cloud-opacity, 0);
-  transform: translateX(var(--cloud-offset, 0px)) rotate(-11deg);
-  filter: blur(22px);
-  background:
-    radial-gradient(ellipse 46% 12% at 59% 48%, #c9d6f4 0%, transparent 100%),
-    radial-gradient(ellipse 42% 21% at 65% 56%, #8fafd5 0%, transparent 100%),
-    radial-gradient(ellipse 42% 13% at 41% 43%, #dce5fa 0%, transparent 100%);
-}
-.flight-cloud-near { transform: translateX(calc(var(--cloud-offset, 0px) * 1.6)) rotate(13deg); filter: blur(34px); }
 .flight-copy {
   position: absolute;
   inset: 0 auto 0 0;
